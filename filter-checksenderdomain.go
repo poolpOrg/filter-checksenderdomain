@@ -31,7 +31,7 @@ var version string
 
 var outputChannel chan string
 
-var filters = map[string]func(string, []string) {
+var filters = map[string]func(string, []string){
 	"mail-from": filterMailFrom,
 }
 
@@ -48,7 +48,7 @@ func produceOutput(msgType string, sessionId string, token string, format string
 	outputChannel <- out
 }
 
-func filterMailFrom(sessionId string, params[] string) {
+func filterMailFrom(sessionId string, params []string) {
 	token := params[0]
 	sender := params[1]
 
@@ -75,7 +75,7 @@ func filterInit() {
 	for k := range filters {
 		fmt.Printf("register|filter|smtp-in|%s\n", k)
 	}
-	fmt.Println("register|ready")	
+	fmt.Println("register|ready")
 }
 
 func trigger(currentSlice map[string]func(string, []string), atoms []string) {
@@ -115,7 +115,7 @@ func main() {
 		if !scanner.Scan() {
 			os.Exit(0)
 		}
-		
+
 		line := scanner.Text()
 		atoms := strings.Split(line, "|")
 		if len(atoms) < 6 {
