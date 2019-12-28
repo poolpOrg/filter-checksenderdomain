@@ -23,26 +23,39 @@ import (
 	"net"
 	"os"
 	"strings"
+
+	"log"
 )
 
-var filters = map[string]func(string, []string) {
+var version string
+
+var outputChannel chan string
+
+var filters = map[string]func(string, []string){
 	"mail-from": filterMailFrom,
 }
 
-func filterMailFrom(sessionId string, params[] string) {
+func produceOutput(msgType string, sessionId string, token string, format string, a ...interface{}) {
+	var out string
+
+	if version < "0.5" {
+		out = msgType + "|" + token + "|" + sessionId
+	} else {
+		out = msgType + "|" + sessionId + "|" + token
+	}
+	out += "|" + fmt.Sprintf(format, a...)
+
+	outputChannel <- out
+}
+
+func filterMailFrom(sessionId string, params []string) {
 	token := params[0]
 	sender := params[1]
 
-	// mailer daemon
-	if sender == "" {
-		fmt.Printf("filter-result|%s|%s|proceed\n", token, sessionId)
-		return
-	}
-
-	// local user
 	parts := strings.Split(sender, "@")
 	if len(parts) == 1 {
-		fmt.Printf("filter-result|%s|%s|proceed\n", token, sessionId)
+		// mailer daemon or local user
+		produceOutput("filter-result", sessionId, token, "proceed")
 		return
 	}
 
@@ -51,32 +64,25 @@ func filterMailFrom(sessionId string, params[] string) {
 
 func resolveDomain(sessionId string, token string, domain string) {
 	_, err := net.LookupHost(domain)
-	if err != nil {
-		fmt.Printf("filter-result|%s|%s|reject|550 unknown sender domain\n", token, sessionId)
-		return
+	if err == nil {
+		produceOutput("filter-result", sessionId, token, "proceed")
+	} else {
+		produceOutput("filter-result", sessionId, token, "reject|550 unknown sender domain")
 	}
-
-	fmt.Printf("filter-result|%s|%s|proceed\n", token, sessionId)
 }
 
 func filterInit() {
 	for k := range filters {
 		fmt.Printf("register|filter|smtp-in|%s\n", k)
 	}
-	fmt.Println("register|ready")	
+	fmt.Println("register|ready")
 }
 
 func trigger(currentSlice map[string]func(string, []string), atoms []string) {
-	found := false
-	for k, v := range currentSlice {
-		if k == atoms[4] {
-			v(atoms[5], atoms[6:])
-			found = true
-			break
-		}
-	}
-	if !found {
-		os.Exit(1)
+	if handler, ok := currentSlice[atoms[4]]; ok {
+		handler(atoms[5], atoms[6:])
+	} else {
+		log.Fatalf("invalid phase: %s", atoms[4])
 	}
 }
 
@@ -98,18 +104,28 @@ func main() {
 	skipConfig(scanner)
 	filterInit()
 
+	outputChannel = make(chan string)
+	go func() {
+		for line := range outputChannel {
+			fmt.Println(line)
+		}
+	}()
+
 	for {
 		if !scanner.Scan() {
 			os.Exit(0)
 		}
-		
-		atoms := strings.Split(scanner.Text(), "|")
+
+		line := scanner.Text()
+		atoms := strings.Split(line, "|")
 		if len(atoms) < 6 {
-			os.Exit(1)
+			log.Fatalf("missing atoms: %s", line)
 		}
 
+		version = atoms[1]
+
 		if atoms[0] != "filter" {
-			os.Exit(1)
+			log.Fatalf("invalid stream: %s", atoms[0])
 		}
 
 		trigger(filters, atoms)
