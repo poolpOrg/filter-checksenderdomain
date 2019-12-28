@@ -33,15 +33,9 @@ func filterMailFrom(sessionId string, params[] string) {
 	token := params[0]
 	sender := params[1]
 
-	// mailer daemon
-	if sender == "" {
-		fmt.Printf("filter-result|%s|%s|proceed\n", token, sessionId)
-		return
-	}
-
-	// local user
 	parts := strings.Split(sender, "@")
 	if len(parts) == 1 {
+		// mailer daemon or local user
 		fmt.Printf("filter-result|%s|%s|proceed\n", token, sessionId)
 		return
 	}
