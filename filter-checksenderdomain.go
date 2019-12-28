@@ -25,8 +25,25 @@ import (
 	"strings"
 )
 
+var version string
+
+var outputChannel chan string
+
 var filters = map[string]func(string, []string) {
 	"mail-from": filterMailFrom,
+}
+
+func produceOutput(msgType string, sessionId string, token string, format string, a ...interface{}) {
+	var out string
+
+	if version < "0.5" {
+		out = msgType + "|" + token + "|" + sessionId
+	} else {
+		out = msgType + "|" + sessionId + "|" + token
+	}
+	out += "|" + fmt.Sprintf(format, a...)
+
+	outputChannel <- out
 }
 
 func filterMailFrom(sessionId string, params[] string) {
@@ -36,7 +53,7 @@ func filterMailFrom(sessionId string, params[] string) {
 	parts := strings.Split(sender, "@")
 	if len(parts) == 1 {
 		// mailer daemon or local user
-		fmt.Printf("filter-result|%s|%s|proceed\n", token, sessionId)
+		produceOutput("filter-result", sessionId, token, "proceed")
 		return
 	}
 
@@ -45,12 +62,11 @@ func filterMailFrom(sessionId string, params[] string) {
 
 func resolveDomain(sessionId string, token string, domain string) {
 	_, err := net.LookupHost(domain)
-	if err != nil {
-		fmt.Printf("filter-result|%s|%s|reject|550 unknown sender domain\n", token, sessionId)
-		return
+	if err == nil {
+		produceOutput("filter-result", sessionId, token, "proceed")
+	} else {
+		produceOutput("filter-result", sessionId, token, "reject|550 unknown sender domain")
 	}
-
-	fmt.Printf("filter-result|%s|%s|proceed\n", token, sessionId)
 }
 
 func filterInit() {
@@ -92,6 +108,13 @@ func main() {
 	skipConfig(scanner)
 	filterInit()
 
+	outputChannel = make(chan string)
+	go func() {
+		for line := range outputChannel {
+			fmt.Println(line)
+		}
+	}()
+
 	for {
 		if !scanner.Scan() {
 			os.Exit(0)
@@ -101,6 +124,8 @@ func main() {
 		if len(atoms) < 6 {
 			os.Exit(1)
 		}
+
+		version = atoms[1]
 
 		if atoms[0] != "filter" {
 			os.Exit(1)
