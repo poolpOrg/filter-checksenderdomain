@@ -23,6 +23,8 @@ import (
 	"net"
 	"os"
 	"strings"
+
+	"log"
 )
 
 var version string
@@ -77,16 +79,10 @@ func filterInit() {
 }
 
 func trigger(currentSlice map[string]func(string, []string), atoms []string) {
-	found := false
-	for k, v := range currentSlice {
-		if k == atoms[4] {
-			v(atoms[5], atoms[6:])
-			found = true
-			break
-		}
-	}
-	if !found {
-		os.Exit(1)
+	if handler, ok := currentSlice[atoms[4]]; ok {
+		handler(atoms[5], atoms[6:])
+	} else {
+		log.Fatalf("invalid phase: %s", atoms[4])
 	}
 }
 
