@@ -67,7 +67,12 @@ func resolveDomain(sessionId string, token string, domain string) {
 	if err == nil {
 		produceOutput("filter-result", sessionId, token, "proceed")
 	} else {
-		produceOutput("filter-result", sessionId, token, "reject|550 unknown sender domain")
+		_, err := net.LookupMX(domain)
+		if err == nil {
+			produceOutput("filter-result", sessionId, token, "proceed")
+		} else {
+			produceOutput("filter-result", sessionId, token, "reject|550 unknown sender domain")
+		}
 	}
 }
 
